@@ -50,20 +50,47 @@ def search_plants(query: dict) -> list:
     print(f'Calling Search  Plants with query {query}')
 
     url = 'https://strong-province-113523.appspot.com/search'
+    try:
+        response = requests.get(url,query)
+        if response.status_code != 200:
+            return 'Error calling plant search API'
+        else: return response.json()
+    except:
+        return 'Error calling plant search API'
+    
+query ={'min_price':20,'max_price': 30, 'care_level': 'difficult'}
+results = search_plants(query)
+print(results)
 
 agent = create_agent(
     model='gemini-2.5-flash',
-    tools=[get_order_status],
+    tools=[get_order_status, search_plants],
     system_prompt=""" You are a friendly helpful assistant for houseplant store.
     if the user asks about other types of plants, or anything that isnt plant-related, dont answer
     but remind them what you can do. 
     Dont include any technical information in the response.
-    """
+    """,
+    checkpointer= InMemorySaver()
 )
 
-response = agent.invoke({'messages': 'Where is my order 1234?'})
+thread_id = uuid4()
+print(thread_id)
+config = {'configgurable': {'thread_id': thread_id}}
 
-messages = response['messages']
-for message in messages:
-    message.pretty_print()
+print('Welcome to the houseplant store! How can I help?')
+while True:
 
+    user_message = input('> ')
+    if not user_message: # empty string
+        print('Thanks for chatting today, goodbye!')
+        break
+    human_message = HumanMessage(user_message)
+    response = agent.invoke({'messages': [human_message]}, config=config)
+
+
+    messages = response['messages']
+    # for message in messages:
+    #     message.pretty_print()
+    ai_message = messages[-1] # -1 is the last item in a list
+    ai_message_text = ai_message.content
+    rich.print(Markdown(ai_message_text))
