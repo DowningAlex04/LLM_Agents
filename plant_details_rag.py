@@ -47,9 +47,52 @@ def create_retriver():
 
     results = vector_store.max_marginal_relevance_search(query=query, k=2)
     for res in results:
-        print(res.content)
+        print(res.page_content)
         
     retriever = vector_store.as_retriever(search_type = 'mmr',search_kwargs={'k':5,'fetch_k':15})
     return retriever
 
-create_retriver
+def create_rag_chain(retreiver):
+    rag_prompt = PromptTemplate(
+        template="""
+    Answer the customer's question using the context provided.
+    Reply 'I dont know' if the context cant be used to answer the customers question.
+    if the content doesnt directly answer the question, reply with whatever you do know
+    from the context that may be related
+
+    use this context to answer the question:
+    {context} 
+
+    Customer question:
+    {question}
+
+    Response:
+    """, 
+    input_variables=['context', 'question']
+    )
+
+    llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash',temperature=0.5)
+
+    plant_rag_chain =(
+        {'context': retreiver, 'question': RunnablePassthrough()}
+        | rag_prompt
+        | llm
+        | StrOutputParser()
+    )
+    return plant_rag_chain
+
+@tool
+def plant_rag(customer_query):
+    """
+    Answer general questions about plant care and plant attributes for plants we sell
+    and, find plants that match customer requirements, for example, care levels, size, ammount of sun/light, water, soil
+    """
+    return plant_rag_chain.invoke(customer_query)
+
+document_retriver = create_retriver()
+plant_rag_chain = create_rag_chain(document_retriver)
+
+# customer_query = 'Does a spider plant like humidity?'
+# rag_result = plant_rag.invoke(customer_query)
+# print(rag_result)
+
